@@ -5,8 +5,30 @@ import traceback
 import ast
 import re
 import random
-import io
-import contextlib
+
+# ============================================================
+# OPTIONAL WINDOWS VOICE
+# ============================================================
+
+try:
+    import win32com.client as wincom
+    speak = wincom.Dispatch("SAPI.SpVoice")
+    voice_available = True
+except Exception:
+    speak = None
+    voice_available = False
+
+voice_enabled = True
+
+
+def speak_text(text):
+    if not voice_enabled or not voice_available:
+        return
+    try:
+        speak.Speak(str(text))
+    except Exception:
+        pass
+
 
 # ============================================================
 # OPTIONAL MATPLOTLIB
@@ -21,43 +43,11 @@ except Exception:
 
 
 # ============================================================
-# VOICE
-# ============================================================
-
-try:
-    import win32com.client as wincom
-
-    speak = wincom.Dispatch("SAPI.SpVoice")
-    voice_available = True
-
-except Exception:
-    speak = None
-    voice_available = False
-
-voice_enabled = True
-
-
-def speak_text(text):
-
-    if not voice_enabled or not voice_available:
-        return
-
-    try:
-        speak.Speak(str(text))
-    except Exception:
-        pass
-
-
-# ============================================================
 # DATABASE
 # ============================================================
 
-connection = sqlite3.connect(
-    "coding_history.db"
-)
-
+connection = sqlite3.connect("coding_history.db")
 cursor = connection.cursor()
-
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
@@ -66,7 +56,6 @@ CREATE TABLE IF NOT EXISTS users (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """)
-
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS errors (
@@ -80,7 +69,6 @@ CREATE TABLE IF NOT EXISTS errors (
 )
 """)
 
-
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS submissions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,7 +78,6 @@ CREATE TABLE IF NOT EXISTS submissions (
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """)
-
 
 connection.commit()
 
@@ -103,14 +90,12 @@ current_username = ""
 
 practice_difficulty = ""
 practice_type = ""
-
 current_question = None
 
 practice_score = 0
-practice_total = 0
+practice_attempts = 0
 practice_correct = 0
 practice_wrong = 0
-practice_answered = False
 
 
 # ============================================================
@@ -122,398 +107,316 @@ PRACTICE_DATA = {
     "Easy": {
 
         "MCQ": [
-
             {
-                "question":
-                "What is the output of: print(2 + 3 * 2)?",
-
-                "options": [
-                    "10",
-                    "8",
-                    "12",
-                    "7"
-                ],
-
-                "answer":
-                "8",
-
+                "question": "What is the output of: print(2 + 3 * 2)?",
+                "options": ["10", "8", "12", "7"],
+                "answer": "8",
                 "explanation":
-                "Multiplication happens before addition. "
-                "3 multiplied by 2 is 6 and 2 plus 6 is 8."
+                    "Multiplication happens before addition. "
+                    "3 * 2 = 6 and 2 + 6 = 8.",
+                "solution":
+                    "First calculate 3 * 2 = 6. Then 2 + 6 = 8. "
+                    "Therefore, the output is 8."
             },
-
             {
-                "question":
-                "Which keyword is used to define a function?",
-
-                "options": [
-                    "function",
-                    "define",
-                    "def",
-                    "fun"
-                ],
-
-                "answer":
-                "def",
-
+                "question": "Which keyword is used to define a function?",
+                "options": ["function", "define", "def", "fun"],
+                "answer": "def",
                 "explanation":
-                "Python uses the def keyword to create a function."
+                    "Python uses the def keyword to create a function.",
+                "solution":
+                    "The correct keyword is def. Example: def add(a, b):"
             },
-
             {
-                "question":
-                "Which data type stores True or False?",
-
-                "options": [
-                    "int",
-                    "str",
-                    "bool",
-                    "float"
-                ],
-
-                "answer":
-                "bool",
-
+                "question": "Which data type stores True or False?",
+                "options": ["int", "str", "bool", "float"],
+                "answer": "bool",
                 "explanation":
-                "Boolean values in Python are True and False."
+                    "Boolean values in Python are True and False.",
+                "solution":
+                    "The bool data type represents True or False values."
             },
-
             {
-                "question":
-                "What does len([10, 20, 30]) return?",
-
-                "options": [
-                    "2",
-                    "3",
-                    "4",
-                    "30"
-                ],
-
-                "answer":
-                "3",
-
+                "question": "What does len([10, 20, 30]) return?",
+                "options": ["2", "3", "4", "30"],
+                "answer": "3",
                 "explanation":
-                "The list contains three elements."
+                    "The list contains three elements.",
+                "solution":
+                    "The list has 3 elements: 10, 20 and 30. Therefore len() returns 3."
             }
         ],
 
         "Code Writing": [
-
             {
-                "question":
-                "Write Python code to print 'Hello World'.",
-
-                "answer":
-                "print('Hello World')",
-
-                "explanation":
-                "Use Python's print function to display Hello World."
+                "question": "Write Python code to print 'Hello World'.",
+                "answer": "print('Hello World')",
+                "explanation": "Use Python's print() function.",
+                "solution":
+                    "Use the print() function:\n\nprint('Hello World')"
             },
-
             {
                 "question":
-                "Write Python code to calculate the sum of two "
-                "numbers stored in variables a and b.",
-
-                "answer":
-                "print(a + b)",
-
+                    "Write Python code to calculate the sum of two numbers "
+                    "stored in variables a and b.",
+                "answer": "print(a + b)",
                 "explanation":
-                "The plus operator adds the values stored in a and b."
+                    "The + operator adds the values of a and b.",
+                "solution":
+                    "Use the + operator:\n\nprint(a + b)"
             }
         ],
 
         "Code Output": [
-
             {
                 "question":
-                "What is the output?\n\n"
-                "x = 5\n"
-                "y = 2\n"
-                "print(x + y)",
-
-                "answer":
-                "7",
-
-                "explanation":
-                "5 plus 2 equals 7."
+                    "What is the output?\n\n"
+                    "x = 5\n"
+                    "y = 2\n"
+                    "print(x + y)",
+                "answer": "7",
+                "explanation": "5 + 2 = 7.",
+                "solution":
+                    "x = 5 and y = 2.\n"
+                    "The expression x + y becomes 5 + 2 = 7.\n"
+                    "Output: 7"
             },
-
             {
                 "question":
-                "What is the output?\n\n"
-                "name = 'Python'\n"
-                "print(len(name))",
-
-                "answer":
-                "6",
-
-                "explanation":
-                "The word Python contains six characters."
+                    "What is the output?\n\n"
+                    "name = 'Python'\n"
+                    "print(len(name))",
+                "answer": "6",
+                "explanation": "'Python' contains 6 characters.",
+                "solution":
+                    "'Python' has six characters: P, y, t, h, o, n.\n"
+                    "Output: 6"
             }
         ]
     },
-
 
     "Medium": {
 
         "MCQ": [
-
             {
                 "question":
-                "What is the output of:\n"
-                "numbers = [1, 2, 3]\n"
-                "print(numbers[-1])",
-
-                "options": [
-                    "1",
-                    "2",
-                    "3",
-                    "Error"
-                ],
-
-                "answer":
-                "3",
-
+                    "What is the output?\n"
+                    "numbers = [1, 2, 3]\n"
+                    "print(numbers[-1])",
+                "options": ["1", "2", "3", "Error"],
+                "answer": "3",
                 "explanation":
-                "Index -1 refers to the last element of a list."
+                    "Index -1 refers to the last element of a list.",
+                "solution":
+                    "Negative index -1 means the last item of the list.\n"
+                    "Therefore numbers[-1] is 3."
             },
-
             {
                 "question":
-                "Which method adds an element to the end of a list?",
-
-                "options": [
-                    "add()",
-                    "append()",
-                    "insert_end()",
-                    "push()"
-                ],
-
-                "answer":
-                "append()",
-
+                    "Which method adds an element to the end of a list?",
+                "options": ["add()", "append()", "insert_end()", "push()"],
+                "answer": "append()",
                 "explanation":
-                "The append method adds an element to the end of a list."
+                    "list.append(value) adds a value to the end.",
+                "solution":
+                    "The append() method adds an item at the end of a list."
             },
-
             {
                 "question":
-                "What does range(5) generate?",
-
-                "options": [
-                    "1,2,3,4,5",
-                    "0,1,2,3,4",
-                    "0,1,2,3,4,5",
-                    "5 only"
-                ],
-
-                "answer":
-                "0,1,2,3,4",
-
+                    "What does range(5) generate?",
+                "options":
+                    ["1,2,3,4,5", "0,1,2,3,4", "0,1,2,3,4,5", "5 only"],
+                "answer": "0,1,2,3,4",
                 "explanation":
-                "range(5) starts at zero and stops before five."
+                    "range(5) starts at 0 and stops before 5.",
+                "solution":
+                    "range(5) produces values starting at 0 and ending before 5:\n"
+                    "0, 1, 2, 3, 4."
             }
         ],
 
         "Code Writing": [
-
             {
                 "question":
-                "Write a Python program that prints numbers "
-                "from 1 to 5 using a for loop.",
-
+                    "Write a Python program that prints numbers "
+                    "from 1 to 5 using a for loop.",
                 "answer":
-                "for i in range(1, 6):\n"
-                "    print(i)",
-
+                    "for i in range(1, 6):\n    print(i)",
                 "explanation":
-                "range(1, 6) generates the numbers 1 through 5."
+                    "range(1, 6) produces 1, 2, 3, 4, 5.",
+                "solution":
+                    "Use range(1, 6) because the ending value 6 is excluded:\n\n"
+                    "for i in range(1, 6):\n"
+                    "    print(i)"
             },
-
             {
                 "question":
-                "Write a Python program to check whether a number "
-                "is even or odd.",
-
+                    "Write a Python program to check whether a number "
+                    "is even or odd.",
                 "answer":
-                "if n % 2 == 0:\n"
-                "    print('Even')\n"
-                "else:\n"
-                "    print('Odd')",
-
+                    "if n % 2 == 0:\n    print('Even')\nelse:\n    print('Odd')",
                 "explanation":
-                "A number is even when its remainder after division "
-                "by 2 is zero."
+                    "A number is even when its remainder after division "
+                    "by 2 is zero.",
+                "solution":
+                    "Use the modulus operator %:\n\n"
+                    "if n % 2 == 0:\n"
+                    "    print('Even')\n"
+                    "else:\n"
+                    "    print('Odd')"
             }
         ],
 
         "Code Output": [
-
             {
                 "question":
-                "What is the output?\n\n"
-                "total = 0\n"
-                "for i in range(1, 4):\n"
-                "    total += i\n"
-                "print(total)",
-
-                "answer":
-                "6",
-
+                    "What is the output?\n\n"
+                    "total = 0\n"
+                    "for i in range(1, 4):\n"
+                    "    total += i\n"
+                    "print(total)",
+                "answer": "6",
                 "explanation":
-                "The loop calculates 1 plus 2 plus 3, which equals 6."
+                    "The loop calculates 1 + 2 + 3 = 6.",
+                "solution":
+                    "The loop runs for i = 1, 2 and 3.\n"
+                    "total becomes 1, then 3, then 6.\n"
+                    "Output: 6"
             },
-
             {
                 "question":
-                "What is the output?\n\n"
-                "numbers = [10, 20, 30]\n"
-                "numbers.append(40)\n"
-                "print(len(numbers))",
-
-                "answer":
-                "4",
-
+                    "What is the output?\n\n"
+                    "numbers = [10, 20, 30]\n"
+                    "numbers.append(40)\n"
+                    "print(len(numbers))",
+                "answer": "4",
                 "explanation":
-                "append adds 40, so the list contains four elements."
+                    "append() adds 40, so the list contains four elements.",
+                "solution":
+                    "The original list has 3 elements. append(40) adds one more.\n"
+                    "Therefore len(numbers) is 4."
             }
         ]
     },
 
-
     "Tough": {
 
         "MCQ": [
-
             {
                 "question":
-                "What is the output?\n\n"
-                "x = [1, 2, 3]\n"
-                "y = x\n"
-                "y.append(4)\n"
-                "print(x)",
-
-                "options": [
-                    "[1, 2, 3]",
-                    "[1, 2, 3, 4]",
-                    "[4]",
-                    "Error"
-                ],
-
-                "answer":
-                "[1, 2, 3, 4]",
-
+                    "What is the output?\n\n"
+                    "x = [1, 2, 3]\n"
+                    "y = x\n"
+                    "y.append(4)\n"
+                    "print(x)",
+                "options":
+                    ["[1, 2, 3]", "[1, 2, 3, 4]", "[4]", "Error"],
+                "answer": "[1, 2, 3, 4]",
                 "explanation":
-                "y refers to the same list object as x. "
-                "Therefore appending through y also changes x."
+                    "y references the same list object as x.",
+                "solution":
+                    "y = x does not create a new list. Both variables refer "
+                    "to the same list. Therefore append(4) changes x too."
             },
-
             {
                 "question":
-                "Which concept allows a function to call itself?",
-
-                "options": [
-                    "Iteration",
-                    "Inheritance",
-                    "Recursion",
-                    "Encapsulation"
-                ],
-
-                "answer":
-                "Recursion",
-
+                    "Which concept allows a function to call itself?",
+                "options":
+                    ["Iteration", "Inheritance", "Recursion", "Encapsulation"],
+                "answer": "Recursion",
                 "explanation":
-                "Recursion occurs when a function calls itself."
+                    "Recursion occurs when a function calls itself.",
+                "solution":
+                    "A function calling itself is called recursion."
             },
-
             {
                 "question":
-                "What is the average-case lookup complexity "
-                "of a Python dictionary?",
-
-                "options": [
-                    "O(n)",
-                    "O(log n)",
-                    "O(1)",
-                    "O(n²)"
-                ],
-
-                "answer":
-                "O(1)",
-
+                    "What is the average-case lookup complexity of a Python dictionary?",
+                "options":
+                    ["O(n)", "O(log n)", "O(1)", "O(n²)"],
+                "answer": "O(1)",
                 "explanation":
-                "Python dictionaries use hash tables, providing "
-                "average constant-time lookup."
+                    "Python dictionaries use hash tables, giving average O(1) lookup.",
+                "solution":
+                    "Python dictionaries are hash-table based. Their average lookup "
+                    "time is O(1)."
             }
         ],
 
         "Code Writing": [
-
             {
                 "question":
-                "Write Python code to find the largest number "
-                "in a list WITHOUT using max().",
-
+                    "Write Python code to find the largest number "
+                    "in a list WITHOUT using max().",
                 "answer":
-                "largest = numbers[0]\n"
-                "for number in numbers:\n"
-                "    if number > largest:\n"
-                "        largest = number\n"
-                "print(largest)",
-
+                    "largest = numbers[0]\n"
+                    "for number in numbers:\n"
+                    "    if number > largest:\n"
+                    "        largest = number\n"
+                    "print(largest)",
                 "explanation":
-                "Start with the first element and update largest "
-                "whenever a larger value is found."
+                    "Start with the first element and update largest "
+                    "whenever a bigger value is found.",
+                "solution":
+                    "A simple solution is:\n\n"
+                    "largest = numbers[0]\n"
+                    "for number in numbers:\n"
+                    "    if number > largest:\n"
+                    "        largest = number\n"
+                    "print(largest)"
             },
-
             {
                 "question":
-                "Write Python code to count the frequency of each "
-                "element in a list using a dictionary.",
-
+                    "Write Python code to count the frequency of each "
+                    "element in a list using a dictionary.",
                 "answer":
-                "frequency = {}\n"
-                "for item in numbers:\n"
-                "    frequency[item] = frequency.get(item, 0) + 1",
-
+                    "frequency = {}\n"
+                    "for item in numbers:\n"
+                    "    frequency[item] = frequency.get(item, 0) + 1",
                 "explanation":
-                "The dictionary stores each item and increments "
-                "its frequency whenever the item appears."
+                    "The dictionary stores each item and increments its count.",
+                "solution":
+                    "Use a dictionary and update the count for every item:\n\n"
+                    "frequency = {}\n"
+                    "for item in numbers:\n"
+                    "    frequency[item] = frequency.get(item, 0) + 1"
             }
         ],
 
         "Code Output": [
-
             {
                 "question":
-                "What is the output?\n\n"
-                "def fun(x):\n"
-                "    if x == 0:\n"
-                "        return 1\n"
-                "    return x * fun(x - 1)\n\n"
-                "print(fun(4))",
-
-                "answer":
-                "24",
-
+                    "What is the output?\n\n"
+                    "def fun(x):\n"
+                    "    if x == 0:\n"
+                    "        return 1\n"
+                    "    return x * fun(x - 1)\n\n"
+                    "print(fun(4))",
+                "answer": "24",
                 "explanation":
-                "The recursive function calculates "
-                "4 multiplied by 3 multiplied by 2 multiplied by 1."
+                    "The recursive function calculates 4 × 3 × 2 × 1 = 24.",
+                "solution":
+                    "fun(4) = 4 * fun(3)\n"
+                    "fun(3) = 3 * fun(2)\n"
+                    "fun(2) = 2 * fun(1)\n"
+                    "fun(1) = 1 * fun(0)\n"
+                    "fun(0) = 1\n\n"
+                    "Therefore 4 × 3 × 2 × 1 = 24.\n"
+                    "Output: 24"
             },
-
             {
                 "question":
-                "What is the output?\n\n"
-                "data = {'a': 1, 'b': 2}\n"
-                "data['c'] = data['a'] + data['b']\n"
-                "print(data['c'])",
-
-                "answer":
-                "3",
-
+                    "What is the output?\n\n"
+                    "data = {'a': 1, 'b': 2}\n"
+                    "data['c'] = data['a'] + data['b']\n"
+                    "print(data['c'])",
+                "answer": "3",
                 "explanation":
-                "data a is 1 and data b is 2, so their sum is 3."
+                    "data['a'] + data['b'] = 1 + 2 = 3.",
+                "solution":
+                    "data['a'] is 1 and data['b'] is 2.\n"
+                    "So data['c'] becomes 1 + 2 = 3.\n"
+                    "Output: 3"
             }
         ]
     }
@@ -525,46 +428,25 @@ PRACTICE_DATA = {
 # ============================================================
 
 def save_submission(username, status, code):
-
-    cursor.execute(
-        """
-        INSERT INTO submissions
-        (username, status, code)
-        VALUES (?, ?, ?)
-        """,
-        (
-            username,
-            status,
-            code
-        )
-    )
-
+    cursor.execute("""
+    INSERT INTO submissions (username, status, code)
+    VALUES (?, ?, ?)
+    """, (username, status, code))
     connection.commit()
 
 
-def save_error(
+def save_error(username, error_type, error_message, line_number, code):
+    cursor.execute("""
+    INSERT INTO errors
+    (username, error_type, error_message, line_number, code)
+    VALUES (?, ?, ?, ?, ?)
+    """, (
         username,
         error_type,
         error_message,
         line_number,
-        code):
-
-    cursor.execute(
-        """
-        INSERT INTO errors
-        (username, error_type, error_message,
-         line_number, code)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (
-            username,
-            error_type,
-            error_message,
-            line_number,
-            code
-        )
-    )
-
+        code
+    ))
     connection.commit()
 
 
@@ -573,43 +455,33 @@ def save_error(
 # ============================================================
 
 def explain_error(error_type):
-
     explanations = {
-
         "ZeroDivisionError":
-        "You are trying to divide by zero. "
-        "Check the denominator.",
+            "You are trying to divide by zero. Check the denominator.",
 
         "TypeError":
-        "You are using incompatible data types. "
-        "Check your variable types.",
+            "You are using incompatible data types. Check your variable types.",
 
         "IndexError":
-        "You are trying to access a list index "
-        "that does not exist.",
+            "You are trying to access a list index that does not exist.",
 
         "NameError":
-        "Python cannot find the variable or function. "
-        "Check its spelling.",
+            "Python cannot find the variable or function. Check its spelling.",
 
         "KeyError":
-        "The dictionary key you are trying to access "
-        "does not exist.",
+            "The dictionary key you are trying to access does not exist.",
 
         "AttributeError":
-        "The object does not have the attribute "
-        "or method you are using.",
+            "The object does not have the attribute or method you are using.",
 
         "ValueError":
-        "The value provided is not suitable "
-        "for this operation.",
+            "The value provided is not suitable for this operation.",
 
         "SyntaxError":
-        "There is a syntax problem. Check brackets, "
-        "colons and indentation.",
+            "There is a syntax problem. Check brackets, colons and indentation.",
 
         "IndentationError":
-        "The indentation of your Python code is incorrect."
+            "The indentation of your Python code is incorrect."
     }
 
     return explanations.get(
@@ -623,77 +495,37 @@ def explain_error(error_type):
 # ============================================================
 
 def calculate_quality(code):
-
     lines = code.splitlines()
-
     score = 100
-
     issues = []
 
-    for number, line in enumerate(
-        lines,
-        start=1
-    ):
-
+    for number, line in enumerate(lines, start=1):
         if len(line) > 80:
-
             issues.append(
-                f"Line {number}: "
-                "Line longer than 80 characters."
+                f"Line {number}: Line longer than 80 characters."
             )
-
             score -= 5
 
-    poor_names = {
-        "x",
-        "y",
-        "z",
-        "a",
-        "b",
-        "c",
-        "q"
-    }
+    poor_names = {"x", "y", "z", "a", "b", "c", "q"}
 
-    for number, line in enumerate(
-        lines,
-        start=1
-    ):
-
+    for number, line in enumerate(lines, start=1):
         stripped = line.strip()
 
-        if "=" in stripped:
-
-            variable = (
-                stripped
-                .split("=")[0]
-                .strip()
-            )
+        if "=" in stripped and not stripped.startswith("#"):
+            variable = stripped.split("=")[0].strip()
 
             if variable in poor_names:
-
                 issues.append(
-                    f"Line {number}: "
-                    f"Variable '{variable}' "
+                    f"Line {number}: Variable '{variable}' "
                     "has a vague name."
                 )
-
                 score -= 5
 
-    for number, line in enumerate(
-        lines,
-        start=1
-    ):
-
-        if (
-            "TODO" in line.upper()
-            or
-            "FIXME" in line.upper()
-        ):
-
+    for number, line in enumerate(lines, start=1):
+        if "TODO" in line.upper() or "FIXME" in line.upper():
             issues.append(
                 f"Line {number}: TODO/FIXME found."
             )
-
             score -= 5
 
     print_count = sum(
@@ -703,46 +535,25 @@ def calculate_quality(code):
     )
 
     if print_count > 5:
-
         issues.append(
-            f"Code contains {print_count} "
-            "print statements."
+            f"Code contains {print_count} print statements."
         )
-
         score -= 5
 
-    for number, line in enumerate(
-        lines,
-        start=1
-    ):
-
+    for number, line in enumerate(lines, start=1):
         if not line.strip():
             continue
 
-        spaces = (
-            len(line)
-            -
-            len(line.lstrip())
-        )
+        spaces = len(line) - len(line.lstrip())
 
-        nesting = spaces // 4
-
-        if nesting >= 4:
-
+        if spaces // 4 >= 4:
             issues.append(
-                f"Line {number}: "
-                "Deep nesting detected."
+                f"Line {number}: Deep nesting detected."
             )
-
             score -= 5
-
             break
 
-    score = max(
-        0,
-        score
-    )
-
+    score = max(0, score)
     return score, issues
 
 
@@ -751,12 +562,10 @@ def calculate_quality(code):
 # ============================================================
 
 def calculate_complexity(code):
-
     lines = code.splitlines()
 
     actual_lines = [
-        line
-        for line in lines
+        line for line in lines
         if line.strip()
     ]
 
@@ -766,41 +575,26 @@ def calculate_complexity(code):
     max_nesting = 0
 
     for line in actual_lines:
-
         stripped = line.strip()
 
-        if (
-            stripped.startswith("for ")
-            or
-            stripped.startswith("while ")
-        ):
-
+        if stripped.startswith("for ") or stripped.startswith("while "):
             loops += 1
 
         if (
             stripped.startswith("if ")
-            or
-            stripped.startswith("elif ")
-            or
-            stripped.startswith("else:")
+            or stripped.startswith("elif ")
+            or stripped.startswith("else:")
         ):
-
             conditions += 1
 
         if stripped.startswith("def "):
-
             functions += 1
 
     for line in lines:
-
         if not line.strip():
             continue
 
-        spaces = (
-            len(line)
-            -
-            len(line.lstrip())
-        )
+        spaces = len(line) - len(line.lstrip())
 
         max_nesting = max(
             max_nesting,
@@ -809,24 +603,16 @@ def calculate_complexity(code):
 
     points = (
         loops * 2
-        +
-        conditions * 2
-        +
-        functions
-        +
-        max_nesting * 2
+        + conditions * 2
+        + functions
+        + max_nesting * 2
     )
 
     if points <= 5:
-
         level = "LOW"
-
     elif points <= 12:
-
         level = "MEDIUM"
-
     else:
-
         level = "HIGH"
 
     return (
@@ -841,48 +627,20 @@ def calculate_complexity(code):
 
 
 # ============================================================
-# CLEAR RESULT
+# RESULT HELPERS
 # ============================================================
 
 def clear_result():
+    result_text.config(state="normal")
+    result_text.delete("1.0", tk.END)
+    result_text.config(state="disabled")
 
-    result_text.config(
-        state="normal"
-    )
-
-    result_text.delete(
-        "1.0",
-        tk.END
-    )
-
-    result_text.config(
-        state="disabled"
-    )
-
-
-# ============================================================
-# SHOW RESULT
-# ============================================================
 
 def show_result(text):
-
-    result_text.config(
-        state="normal"
-    )
-
-    result_text.delete(
-        "1.0",
-        tk.END
-    )
-
-    result_text.insert(
-        tk.END,
-        text
-    )
-
-    result_text.config(
-        state="disabled"
-    )
+    result_text.config(state="normal")
+    result_text.delete("1.0", tk.END)
+    result_text.insert(tk.END, text)
+    result_text.config(state="disabled")
 
 
 # ============================================================
@@ -890,34 +648,21 @@ def show_result(text):
 # ============================================================
 
 def analyze_code():
-
-    code = code_editor.get(
-        "1.0",
-        tk.END
-    ).strip()
+    code = code_editor.get("1.0", tk.END).strip()
 
     if not code:
-
         messagebox.showwarning(
             "No Code",
             "Please enter Python code first."
         )
-
         return
 
     clear_result()
 
-    # ========================================================
-    # SYNTAX CHECK
-    # ========================================================
+    # ---------------- SYNTAX ----------------
 
     try:
-
-        compile(
-            code,
-            "<student_code>",
-            "exec"
-        )
+        compile(code, "<student_code>", "exec")
 
     except SyntaxError as e:
 
@@ -955,8 +700,8 @@ Problem:
 
 🛠️ POSSIBLE FIX
 
-Check brackets, quotes, colons
-and indentation.
+Check your brackets, colons,
+quotes and indentation.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
@@ -964,63 +709,33 @@ and indentation.
         show_result(result)
 
         speak_text(
-            f"Syntax error detected on line "
-            f"{e.lineno}. "
+            f"Syntax error detected on line {e.lineno}. "
             f"{explain_error('SyntaxError')}"
         )
 
         update_dashboard()
-
         return
 
-    # ========================================================
-    # EXECUTION + OUTPUT CAPTURE
-    # ========================================================
-
-    output_buffer = io.StringIO()
+    # ---------------- EXECUTION ----------------
 
     try:
-
-        execution_namespace = {
-            "__builtins__": __builtins__
-        }
-
-        with contextlib.redirect_stdout(
-            output_buffer
-        ):
-
-            with contextlib.redirect_stderr(
-                output_buffer
-            ):
-
-                exec(
-                    code,
-                    execution_namespace,
-                    execution_namespace
-                )
+        exec(
+            code,
+            {
+                "__builtins__": __builtins__
+            }
+        )
 
     except Exception as e:
 
-        output_before_error = (
-            output_buffer
-            .getvalue()
-            .strip()
-        )
-
         error_type = type(e).__name__
-
         error_message = str(e)
-
         line_number = None
 
         try:
-
-            tb = traceback.extract_tb(
-                e.__traceback__
-            )
+            tb = traceback.extract_tb(e.__traceback__)
 
             if tb:
-
                 line_number = tb[-1].lineno
 
         except Exception:
@@ -1054,22 +769,9 @@ Problem:
 Line:
 {line_number}
 
-"""
-
-        if output_before_error:
-
-            result += f"""
-📤 OUTPUT BEFORE ERROR
-
-{output_before_error}
-
-"""
-
-        result += f"""
 🔎 ERROR LOCATION
 
-The error occurred around
-line {line_number}.
+The error occurred around line {line_number}.
 
 💡 MENTOR
 
@@ -1092,30 +794,13 @@ your variables, data types and logic.
         )
 
         update_dashboard()
-
         return
 
-    # ========================================================
-    # PROGRAM OUTPUT
-    # ========================================================
+    # ---------------- QUALITY ----------------
 
-    program_output = (
-        output_buffer
-        .getvalue()
-        .strip()
-    )
+    score, issues = calculate_quality(code)
 
-    # ========================================================
-    # QUALITY
-    # ========================================================
-
-    score, issues = calculate_quality(
-        code
-    )
-
-    # ========================================================
-    # COMPLEXITY
-    # ========================================================
+    # ---------------- COMPLEXITY ----------------
 
     (
         complexity,
@@ -1125,118 +810,72 @@ your variables, data types and logic.
         conditions,
         functions,
         nesting
-    ) = calculate_complexity(
-        code
-    )
-
-    # ========================================================
-    # RECOMMENDATION
-    # ========================================================
+    ) = calculate_complexity(code)
 
     if score >= 90:
-
         recommendation = (
             "Excellent code quality! "
             "Your code is clean and readable."
         )
-
     elif score >= 75:
-
         recommendation = (
             "Good code. A few improvements "
             "can make it cleaner."
         )
-
     elif score >= 50:
-
         recommendation = (
             "Your code works, but it needs "
             "some cleanup."
         )
-
     else:
-
         recommendation = (
             "Your code needs significant improvement."
         )
 
-    # ========================================================
-    # COMPLEXITY TIP
-    # ========================================================
-
     if complexity == "LOW":
-
         complexity_tip = (
             "Your code is simple and easy to understand."
         )
-
     elif complexity == "MEDIUM":
-
         complexity_tip = (
             "Consider breaking large sections "
             "into smaller functions."
         )
-
     else:
-
         complexity_tip = (
             "Try reducing nesting and splitting "
             "the program into smaller functions."
         )
 
-    # ========================================================
-    # IMPROVEMENTS
-    # ========================================================
-
     improvements = []
 
     try:
-
-        tree = ast.parse(
-            code
-        )
+        tree = ast.parse(code)
 
         poor_names = {
-            "x",
-            "y",
-            "z",
-            "a",
-            "b",
-            "c"
+            "x", "y", "z", "a", "b", "c"
         }
 
+        found_names = set()
+
         for node in ast.walk(tree):
-
-            if isinstance(
-                node,
-                ast.Name
-            ):
-
+            if isinstance(node, ast.Name):
                 if node.id in poor_names:
+                    found_names.add(node.id)
 
-                    improvements.append(
-                        f"Consider replacing "
-                        f"'{node.id}' with a "
-                        "descriptive variable name."
-                    )
+        for name in sorted(found_names):
+            improvements.append(
+                f"Consider replacing '{name}' "
+                "with a descriptive variable name."
+            )
 
-        if (
-            functions == 0
-            and
-            lines > 10
-        ):
-
+        if functions == 0 and lines > 10:
             improvements.append(
                 "Consider using functions to divide "
                 "your program into reusable components."
             )
 
-        if (
-            "input(" in code
-            and
-            "try:" not in code
-        ):
-
+        if "input(" in code and "try:" not in code:
             improvements.append(
                 "Consider using try/except "
                 "for input validation."
@@ -1246,7 +885,6 @@ your variables, data types and logic.
             r"(?<![\w.])\d{2,}(?![\w.])",
             code
         ):
-
             improvements.append(
                 "Consider storing frequently used "
                 "numbers in named constants."
@@ -1255,44 +893,15 @@ your variables, data types and logic.
     except Exception:
         pass
 
-    # ========================================================
-    # SAVE SUCCESS
-    # ========================================================
-
     save_submission(
         current_username,
         "SUCCESS",
         code
     )
 
-    # ========================================================
-    # RESULT
-    # ========================================================
-
-    result = """
+    result = f"""
 ✅ CODE EXECUTED SUCCESSFULLY
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📤 PROGRAM OUTPUT
-
-"""
-
-    if program_output:
-
-        result += (
-            program_output
-            +
-            "\n\n"
-        )
-
-    else:
-
-        result += (
-            "No output produced by the program.\n\n"
-        )
-
-    result += f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🧹 CODE QUALITY
@@ -1303,20 +912,12 @@ Score:
 """
 
     if issues:
-
         result += "Issues Found:\n\n"
 
         for issue in issues:
-
-            result += (
-                f"• {issue}\n"
-            )
-
+            result += f"• {issue}\n"
     else:
-
-        result += (
-            "🎉 No major quality issues detected.\n"
-        )
+        result += "🎉 No major quality issues detected.\n"
 
     result += f"""
 
@@ -1346,7 +947,6 @@ Maximum Nesting:
 {nesting}
 
 💡 Complexity Mentor:
-
 {complexity_tip}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1362,49 +962,24 @@ Maximum Nesting:
 """
 
     if improvements:
-
         for number, improvement in enumerate(
             improvements,
             start=1
         ):
-
-            result += (
-                f"{number}. "
-                f"{improvement}\n"
-            )
-
+            result += f"{number}. {improvement}\n"
     else:
-
         result += (
             "🎉 Your code already follows "
             "several good practices!"
         )
 
-    show_result(
-        result
-    )
-
-    # ========================================================
-    # VOICE
-    # ========================================================
-
-    voice_message = (
-        "Code executed successfully. "
-        f"Your quality score is {score} "
-        "out of 100. "
-        f"Complexity is {complexity}. "
-        f"{recommendation}"
-    )
-
-    if program_output:
-
-        voice_message += (
-            f" The program output is "
-            f"{program_output}"
-        )
+    show_result(result)
 
     speak_text(
-        voice_message
+        f"Code executed successfully. "
+        f"Your quality score is {score} out of 100. "
+        f"Complexity is {complexity}. "
+        f"Mentor recommendation: {recommendation}"
     )
 
     update_dashboard()
@@ -1415,12 +990,7 @@ Maximum Nesting:
 # ============================================================
 
 def clear_code():
-
-    code_editor.delete(
-        "1.0",
-        tk.END
-    )
-
+    code_editor.delete("1.0", tk.END)
     clear_result()
 
 
@@ -1433,60 +1003,36 @@ def update_dashboard():
     if not current_username:
         return
 
-    cursor.execute(
-        """
-        SELECT status
-        FROM submissions
-        WHERE username = ?
-        """,
-        (
-            current_username,
-        )
-    )
+    cursor.execute("""
+    SELECT status
+    FROM submissions
+    WHERE username = ?
+    """, (current_username,))
 
     submissions = cursor.fetchall()
 
-    total = len(
-        submissions
-    )
+    total = len(submissions)
 
     successful = sum(
-        1
-        for row in submissions
+        1 for row in submissions
         if row[0] == "SUCCESS"
     )
 
     failed = sum(
-        1
-        for row in submissions
+        1 for row in submissions
         if row[0] == "FAILED"
     )
 
     rate = (
-        successful
-        /
-        total
-        *
-        100
+        successful / total * 100
         if total
         else 0
     )
 
-    total_label.config(
-        text=str(total)
-    )
-
-    success_label.config(
-        text=str(successful)
-    )
-
-    failed_label.config(
-        text=str(failed)
-    )
-
-    rate_label.config(
-        text=f"{rate:.1f}%"
-    )
+    total_label.config(text=str(total))
+    success_label.config(text=str(successful))
+    failed_label.config(text=str(failed))
+    rate_label.config(text=f"{rate:.1f}%")
 
 
 # ============================================================
@@ -1495,40 +1041,29 @@ def update_dashboard():
 
 def show_history():
 
-    cursor.execute(
-        """
-        SELECT
-            error_type,
-            error_message,
-            line_number,
-            timestamp
-        FROM errors
-        WHERE username = ?
-        ORDER BY id DESC
-        """,
-        (
-            current_username,
-        )
-    )
+    cursor.execute("""
+    SELECT
+        error_type,
+        error_message,
+        line_number,
+        timestamp
+    FROM errors
+    WHERE username = ?
+    ORDER BY id DESC
+    """, (current_username,))
 
     records = cursor.fetchall()
 
     if not records:
-
-        show_result(
-            "🎉 No errors recorded yet!"
-        )
-
+        show_result("🎉 No errors recorded yet!")
         return
 
     text = (
-        f"📜 {current_username.upper()}'S "
-        "ERROR HISTORY\n\n"
+        f"📜 {current_username.upper()}'S ERROR HISTORY\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     )
 
     for record in records:
-
         text += (
             f"❌ Error: {record[0]}\n"
             f"Message: {record[1]}\n"
@@ -1537,9 +1072,7 @@ def show_history():
             "────────────────────────────\n\n"
         )
 
-    show_result(
-        text
-    )
+    show_result(text)
 
 
 # ============================================================
@@ -1548,41 +1081,23 @@ def show_history():
 
 def show_bug_patterns():
 
-    cursor.execute(
-        """
-        SELECT error_type
-        FROM errors
-        WHERE username = ?
-        """,
-        (
-            current_username,
-        )
-    )
+    cursor.execute("""
+    SELECT error_type
+    FROM errors
+    WHERE username = ?
+    """, (current_username,))
 
     records = cursor.fetchall()
 
     if not records:
-
-        show_result(
-            "🎉 No bug data available yet!"
-        )
-
+        show_result("🎉 No bug data available yet!")
         return
 
     counts = {}
 
     for record in records:
-
         error = record[0]
-
-        counts[error] = (
-            counts.get(
-                error,
-                0
-            )
-            +
-            1
-        )
+        counts[error] = counts.get(error, 0) + 1
 
     sorted_errors = sorted(
         counts.items(),
@@ -1590,32 +1105,29 @@ def show_bug_patterns():
         reverse=True
     )
 
-    most_common = (
-        sorted_errors[0][0]
-    )
+    most_common = sorted_errors[0][0]
 
     recommendations = {
-
         "TypeError":
-        "Practice data types and type conversion.",
+            "Practice data types and type conversion.",
 
         "IndexError":
-        "Practice lists, indexing and slicing.",
+            "Practice lists, indexing and slicing.",
 
         "NameError":
-        "Practice variables and scope.",
+            "Practice variables and scope.",
 
         "KeyError":
-        "Practice dictionaries.",
+            "Practice dictionaries.",
 
         "ValueError":
-        "Practice type conversion and validation.",
+            "Practice type conversion and validation.",
 
         "ZeroDivisionError":
-        "Practice conditions and arithmetic.",
+            "Practice conditions and arithmetic.",
 
         "AttributeError":
-        "Practice objects and methods."
+            "Practice objects and methods."
     }
 
     recommendation = recommendations.get(
@@ -1624,17 +1136,12 @@ def show_bug_patterns():
     )
 
     text = (
-        f"🐛 {current_username.upper()}'S "
-        "BUG PATTERNS\n\n"
+        f"🐛 {current_username.upper()}'S BUG PATTERNS\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     )
 
     for error, count in sorted_errors:
-
-        text += (
-            f"❌ {error}: "
-            f"{count} time(s)\n"
-        )
+        text += f"❌ {error}: {count} time(s)\n"
 
     text += (
         "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -1644,134 +1151,71 @@ def show_bug_patterns():
         f"{recommendation}"
     )
 
-    show_result(
-        text
-    )
+    show_result(text)
 
     speak_text(
         f"Your most common error is "
         f"{most_common}. "
-        f"Recommendation: "
-        f"{recommendation}"
+        f"Recommendation: {recommendation}"
     )
 
 
 # ============================================================
-# GRAPHS
+# ERROR GRAPHS
 # ============================================================
 
 def show_graphs():
 
     if not MATPLOTLIB_AVAILABLE:
-
         messagebox.showerror(
             "Matplotlib Missing",
-            "Install matplotlib using:\n\n"
-            "pip install matplotlib"
+            "Install matplotlib using:\n\npip install matplotlib"
         )
-
         return
 
-    cursor.execute(
-        """
-        SELECT error_type
-        FROM errors
-        WHERE username = ?
-        """,
-        (
-            current_username,
-        )
-    )
+    cursor.execute("""
+    SELECT error_type
+    FROM errors
+    WHERE username = ?
+    """, (current_username,))
 
     records = cursor.fetchall()
 
     if not records:
-
         messagebox.showinfo(
             "No Data",
             "No error data available yet."
         )
-
         return
 
     counts = {}
 
     for row in records:
-
         error = row[0]
+        counts[error] = counts.get(error, 0) + 1
 
-        counts[error] = (
-            counts.get(
-                error,
-                0
-            )
-            +
-            1
-        )
-
-    graph_window = tk.Toplevel(
-        root
-    )
-
-    graph_window.title(
-        "📊 Error Analytics"
-    )
-
-    graph_window.geometry(
-        "1050x650"
-    )
-
-    graph_window.configure(
-        bg="#101820"
-    )
+    graph_window = tk.Toplevel(root)
+    graph_window.title("📊 Error Analytics")
+    graph_window.geometry("1050x650")
+    graph_window.configure(bg="#101820")
 
     figure = plt.Figure(
         figsize=(11, 6),
         dpi=100
     )
 
-    # BAR
+    ax1 = figure.add_subplot(121)
 
-    ax1 = figure.add_subplot(
-        121
-    )
+    names = list(counts.keys())
+    values = list(counts.values())
 
-    names = list(
-        counts.keys()
-    )
+    ax1.bar(names, values, width=0.6)
+    ax1.set_title("Error Frequency")
+    ax1.set_xlabel("Error Type")
+    ax1.set_ylabel("Number of Errors")
+    ax1.tick_params(axis="x", rotation=45)
 
-    values = list(
-        counts.values()
-    )
-
-    ax1.bar(
-        names,
-        values,
-        width=0.6
-    )
-
-    ax1.set_title(
-        "Error Frequency"
-    )
-
-    ax1.set_xlabel(
-        "Error Type"
-    )
-
-    ax1.set_ylabel(
-        "Number of Errors"
-    )
-
-    ax1.tick_params(
-        axis="x",
-        rotation=45
-    )
-
-    # PIE
-
-    ax2 = figure.add_subplot(
-        122
-    )
+    ax2 = figure.add_subplot(122)
 
     ax2.pie(
         values,
@@ -1780,9 +1224,7 @@ def show_graphs():
         startangle=90
     )
 
-    ax2.set_title(
-        "Error Distribution (%)"
-    )
+    ax2.set_title("Error Distribution (%)")
 
     figure.tight_layout()
 
@@ -1803,60 +1245,46 @@ def show_graphs():
 
 # ============================================================
 # PRACTICE MODE
+# FIXED:
+# 1. NEXT QUESTION BUTTON ALWAYS VISIBLE
+# 2. SOLUTION SHOWN AFTER SUBMIT
+# 3. SOLUTION SPOKEN BY VOICE
+# 4. SCORE / ACCURACY TRACKING
+# 5. NEXT QUESTION WORKS AFTER WRONG ANSWER
 # ============================================================
 
 def open_practice_mode():
 
-    global practice_difficulty
-    global practice_type
-    global current_question
-
     global practice_score
-    global practice_total
+    global practice_attempts
     global practice_correct
     global practice_wrong
-    global practice_answered
 
-    # RESET SESSION
-
+    # Start a fresh practice session
     practice_score = 0
-    practice_total = 0
+    practice_attempts = 0
     practice_correct = 0
     practice_wrong = 0
-    practice_answered = False
-    current_question = None
 
-    # WINDOW
+    practice_window = tk.Toplevel(root)
+    practice_window.title("🎯 Practice Mode")
+    practice_window.geometry("1050x760")
+    practice_window.minsize(900, 650)
+    practice_window.configure(bg="#101820")
 
-    practice_window = tk.Toplevel(
-        root
-    )
-
-    practice_window.title(
-        "🎯 Practice Mode"
-    )
-
-    practice_window.geometry(
-        "950x760"
-    )
-
-    practice_window.configure(
-        bg="#101820"
-    )
-
-    # TITLE
+    # --------------------------------------------------------
+    # HEADER
+    # --------------------------------------------------------
 
     title = tk.Label(
         practice_window,
         text="🎯 PYTHON PRACTICE MODE",
-        font=("Segoe UI", 22, "bold"),
+        font=("Segoe UI", 24, "bold"),
         bg="#101820",
         fg="white"
     )
 
-    title.pack(
-        pady=(18, 5)
-    )
+    title.pack(pady=(18, 5))
 
     subtitle = tk.Label(
         practice_window,
@@ -1866,149 +1294,124 @@ def open_practice_mode():
         fg="#aaaaaa"
     )
 
-    subtitle.pack(
-        pady=(0, 10)
-    )
+    subtitle.pack(pady=(0, 10))
 
+    # --------------------------------------------------------
     # SCORE BAR
+    # --------------------------------------------------------
 
     score_frame = tk.Frame(
         practice_window,
-        bg="#17232c"
+        bg="#17232c",
+        height=48
     )
 
     score_frame.pack(
         fill="x",
-        padx=25,
-        pady=10
+        padx=15,
+        pady=(5, 12)
     )
+
+    score_frame.pack_propagate(False)
 
     score_label = tk.Label(
         score_frame,
-        text=(
-            "Score: 0/0 | Correct: 0 | "
-            "Wrong: 0 | Accuracy: 0%"
-        ),
-        font=("Segoe UI", 12, "bold"),
+        text="Score: 0/0 | Correct: 0 | Wrong: 0 | Accuracy: 0.0%",
+        font=("Segoe UI", 11, "bold"),
         bg="#17232c",
         fg="#4ade80"
     )
 
-    score_label.pack(
-        pady=10
-    )
+    score_label.pack(expand=True)
 
-    # SELECTION
+    # --------------------------------------------------------
+    # SELECTIONS
+    # --------------------------------------------------------
 
     selection_frame = tk.Frame(
         practice_window,
         bg="#101820"
     )
 
-    selection_frame.pack(
-        pady=5
-    )
+    selection_frame.pack(pady=2)
 
     tk.Label(
         selection_frame,
         text="Difficulty:",
-        font=("Segoe UI", 12, "bold"),
+        font=("Segoe UI", 11, "bold"),
         bg="#101820",
         fg="white"
-    ).grid(
-        row=0,
-        column=0,
-        padx=8
-    )
+    ).pack(side="left", padx=(0, 8))
 
-    difficulty_var = tk.StringVar(
-        value="Easy"
-    )
+    difficulty_var = tk.StringVar(value="Easy")
 
     difficulty_box = ttk.Combobox(
         selection_frame,
         textvariable=difficulty_var,
-        values=[
-            "Easy",
-            "Medium",
-            "Tough"
-        ],
+        values=["Easy", "Medium", "Tough"],
         state="readonly",
-        width=15
+        width=15,
+        font=("Segoe UI", 10)
     )
 
-    difficulty_box.grid(
-        row=0,
-        column=1,
-        padx=8
-    )
+    difficulty_box.pack(side="left", padx=(0, 25))
 
     tk.Label(
         selection_frame,
         text="Question Type:",
-        font=("Segoe UI", 12, "bold"),
+        font=("Segoe UI", 11, "bold"),
         bg="#101820",
         fg="white"
-    ).grid(
-        row=0,
-        column=2,
-        padx=8
-    )
+    ).pack(side="left", padx=(0, 8))
 
-    type_var = tk.StringVar(
-        value="MCQ"
-    )
+    type_var = tk.StringVar(value="MCQ")
 
     type_box = ttk.Combobox(
         selection_frame,
         textvariable=type_var,
-        values=[
-            "MCQ",
-            "Code Writing",
-            "Code Output"
-        ],
+        values=["MCQ", "Code Writing", "Code Output"],
         state="readonly",
-        width=18
+        width=18,
+        font=("Segoe UI", 10)
     )
 
-    type_box.grid(
-        row=0,
-        column=3,
-        padx=8
-    )
+    type_box.pack(side="left")
 
-    # QUESTION
+    # --------------------------------------------------------
+    # QUESTION AREA
+    # IMPORTANT: FIXED HEIGHT SO BUTTONS DON'T GO BELOW WINDOW
+    # --------------------------------------------------------
 
     question_frame = tk.Frame(
         practice_window,
-        bg="#17232c"
+        bg="#17232c",
+        height=475
     )
 
     question_frame.pack(
-        fill="both",
-        expand=True,
-        padx=25,
-        pady=10
+        fill="x",
+        padx=15,
+        pady=12
     )
+
+    question_frame.pack_propagate(False)
 
     question_label = tk.Label(
         question_frame,
-        text="Click START PRACTICE",
-        font=("Consolas", 13),
+        text="Select options and click START PRACTICE",
+        font=("Consolas", 12),
         bg="#17232c",
         fg="white",
         justify="left",
         anchor="nw",
-        wraplength=850
+        wraplength=960
     )
 
     question_label.pack(
         fill="x",
         padx=20,
-        pady=20
+        pady=(18, 10)
     )
-
-    # ANSWER
 
     answer_frame = tk.Frame(
         question_frame,
@@ -2018,7 +1421,8 @@ def open_practice_mode():
     answer_frame.pack(
         fill="both",
         expand=True,
-        padx=20
+        padx=20,
+        pady=(0, 5)
     )
 
     answer_var = tk.StringVar()
@@ -2029,75 +1433,70 @@ def open_practice_mode():
         fg="white",
         insertbackground="white",
         font=("Consolas", 12),
-        height=9,
-        wrap="word"
+        height=8,
+        wrap="word",
+        relief="solid",
+        bd=1
     )
 
     option_buttons = []
 
-    # RESULT
+    # --------------------------------------------------------
+    # RESULT / SOLUTION AREA
+    # --------------------------------------------------------
 
     result_label_practice = tk.Label(
         question_frame,
         text="",
-        font=("Segoe UI", 11, "bold"),
+        font=("Segoe UI", 10, "bold"),
         bg="#17232c",
         fg="white",
         justify="left",
-        anchor="w",
-        wraplength=850
+        anchor="nw",
+        wraplength=960
     )
 
     result_label_practice.pack(
         fill="x",
         padx=20,
-        pady=10
+        pady=(5, 10)
     )
 
-    # ========================================================
+    # --------------------------------------------------------
     # UPDATE SCORE
-    # ========================================================
+    # --------------------------------------------------------
 
     def update_practice_score():
 
+        total = practice_attempts
+
         accuracy = (
-            practice_correct
-            /
-            practice_total
-            *
-            100
-            if practice_total
+            practice_correct / total * 100
+            if total
             else 0
         )
 
         score_label.config(
             text=(
-                f"Score: {practice_correct}/"
-                f"{practice_total} | "
+                f"Score: {practice_correct}/{total} | "
                 f"Correct: {practice_correct} | "
                 f"Wrong: {practice_wrong} | "
                 f"Accuracy: {accuracy:.1f}%"
             )
         )
 
-    # ========================================================
-    # START PRACTICE
-    # ========================================================
+    # --------------------------------------------------------
+    # START QUESTION
+    # --------------------------------------------------------
 
     def start_practice():
 
         global practice_difficulty
         global practice_type
         global current_question
-        global practice_answered
 
-        practice_difficulty = (
-            difficulty_var.get()
-        )
-
-        practice_type = (
-            type_var.get()
-        )
+        practice_difficulty = difficulty_var.get()
+        practice_type = type_var.get()
 
         questions = PRACTICE_DATA[
             practice_difficulty
@@ -2105,11 +1504,7 @@ def open_practice_mode():
             practice_type
         ]
 
-        current_question = random.choice(
-            questions
-        )
-
-        practice_answered = False
+        current_question = random.choice(questions)
 
         result_label_practice.config(
             text="",
@@ -2119,20 +1514,20 @@ def open_practice_mode():
         answer_var.set("")
 
         for button in option_buttons:
-
             button.destroy()
 
         option_buttons.clear()
 
-        answer_entry.pack_forget()
-
-        # MCQ
+        answer_entry.delete(
+            "1.0",
+            tk.END
+        )
 
         if practice_type == "MCQ":
 
-            for option in current_question[
-                "options"
-            ]:
+            answer_entry.pack_forget()
+
+            for option in current_question["options"]:
 
                 button = tk.Radiobutton(
                     answer_frame,
@@ -2150,21 +1545,12 @@ def open_practice_mode():
 
                 button.pack(
                     fill="x",
-                    pady=5
+                    pady=4
                 )
 
-                option_buttons.append(
-                    button
-                )
-
-        # CODE
+                option_buttons.append(button)
 
         else:
-
-            answer_entry.delete(
-                "1.0",
-                tk.END
-            )
 
             answer_entry.pack(
                 fill="both",
@@ -2181,21 +1567,61 @@ def open_practice_mode():
 
         speak_text(
             f"New {practice_difficulty} "
-            f"{practice_type} question. "
-            f"{current_question['question']}"
+            f"{practice_type} question."
         )
 
-    # ========================================================
-    # SUBMIT
-    # ========================================================
+    # --------------------------------------------------------
+    # CHECK CODE WRITING ANSWER
+    # More flexible than exact string matching
+    # --------------------------------------------------------
+
+    def code_answers_match(user_answer, correct_answer):
+
+        user_normalized = (
+            user_answer
+            .strip()
+            .lower()
+            .replace(" ", "")
+            .replace("\r", "")
+            .replace("\n", "")
+            .replace('"', "'")
+        )
+
+        correct_normalized = (
+            correct_answer
+            .strip()
+            .lower()
+            .replace(" ", "")
+            .replace("\r", "")
+            .replace("\n", "")
+            .replace('"', "'")
+        )
+
+        if user_normalized == correct_normalized:
+            return True
+
+        try:
+            user_tree = ast.parse(user_answer)
+            correct_tree = ast.parse(correct_answer)
+
+            return (
+                ast.dump(user_tree, include_attributes=False)
+                == ast.dump(correct_tree, include_attributes=False)
+            )
+
+        except Exception:
+            return False
+
+    # --------------------------------------------------------
+    # SUBMIT ANSWER
+    # --------------------------------------------------------
 
     def submit_answer():
 
-        global practice_score
-        global practice_total
+        global current_question
+        global practice_attempts
         global practice_correct
         global practice_wrong
-        global practice_answered
 
         if current_question is None:
 
@@ -2206,36 +1632,16 @@ def open_practice_mode():
 
             return
 
-        if practice_answered:
-
-            messagebox.showinfo(
-                "Already Submitted",
-                "This question is already submitted. "
-                "Click NEXT QUESTION."
-            )
-
-            return
-
-        # GET ANSWER
-
         if practice_type == "MCQ":
 
-            user_answer = (
-                answer_var
-                .get()
-                .strip()
-            )
+            user_answer = answer_var.get().strip()
 
         else:
 
-            user_answer = (
-                answer_entry
-                .get(
-                    "1.0",
-                    tk.END
-                )
-                .strip()
-            )
+            user_answer = answer_entry.get(
+                "1.0",
+                tk.END
+            ).strip()
 
         if not user_answer:
 
@@ -2246,269 +1652,130 @@ def open_practice_mode():
 
             return
 
-        correct_answer = (
-            current_question["answer"]
-        )
+        correct_answer = current_question["answer"]
 
-        # NORMALIZE
+        if practice_type == "Code Writing":
+            is_correct = code_answers_match(
+                user_answer,
+                correct_answer
+            )
+        else:
+            user_normalized = (
+                user_answer
+                .strip()
+                .lower()
+                .replace(" ", "")
+                .replace("\r", "")
+                .replace("\n", "")
+            )
 
-        user_normalized = (
-            user_answer
-            .strip()
-            .lower()
-            .replace(" ", "")
-            .replace("\n", "")
-            .replace("\r", "")
-        )
+            correct_normalized = (
+                correct_answer
+                .strip()
+                .lower()
+                .replace(" ", "")
+                .replace("\r", "")
+                .replace("\n", "")
+            )
 
-        correct_normalized = (
-            correct_answer
-            .strip()
-            .lower()
-            .replace(" ", "")
-            .replace("\n", "")
-            .replace("\r", "")
-        )
+            is_correct = (
+                user_normalized
+                == correct_normalized
+            )
 
-        is_correct = (
-            user_normalized
-            ==
-            correct_normalized
-        )
-
-        # COUNT
-
-        practice_total += 1
-
-        practice_answered = True
+        # Count attempt
+        practice_attempts += 1
 
         if is_correct:
 
             practice_correct += 1
-            practice_score += 1
+
+            result_label_practice.config(
+                text=(
+                    "✅ CORRECT!\n\n"
+                    "💡 EXPLANATION\n"
+                    f"{current_question['explanation']}\n\n"
+                    "📝 SOLUTION\n"
+                    f"{current_question['solution']}"
+                ),
+                fg="#4ade80"
+            )
+
+            speak_text(
+                "Correct answer. "
+                + current_question["explanation"]
+                + " The solution is. "
+                + current_question["solution"]
+            )
 
         else:
 
             practice_wrong += 1
 
-        update_practice_score()
-
-        accuracy = (
-            practice_correct
-            /
-            practice_total
-            *
-            100
-        )
-
-        # CORRECT
-
-        if is_correct:
-
-            result_text = (
-                "✅ CORRECT!\n\n"
-                "🎯 PRACTICE ANALYSIS\n\n"
-                f"Current Score: "
-                f"{practice_correct}/"
-                f"{practice_total}\n"
-                f"Accuracy: "
-                f"{accuracy:.1f}%\n\n"
-                "💡 SOLUTION / EXPLANATION\n\n"
-                f"{current_question['explanation']}"
-            )
-
             result_label_practice.config(
-                text=result_text,
-                fg="#4ade80"
-            )
-
-            speak_text(
-                "Correct answer! "
-                f"Your current score is "
-                f"{practice_correct} out of "
-                f"{practice_total}. "
-                f"Your accuracy is "
-                f"{accuracy:.1f} percent. "
-                "Here is the solution. "
-                f"{current_question['explanation']}"
-            )
-
-        # WRONG
-
-        else:
-
-            result_text = (
-                "❌ INCORRECT\n\n"
-                "🎯 PRACTICE ANALYSIS\n\n"
-                f"Current Score: "
-                f"{practice_correct}/"
-                f"{practice_total}\n"
-                f"Accuracy: "
-                f"{accuracy:.1f}%\n\n"
-                "❌ YOUR ANSWER\n\n"
-                f"{user_answer}\n\n"
-                "✅ CORRECT SOLUTION\n\n"
-                f"{correct_answer}\n\n"
-                "💡 EXPLANATION\n\n"
-                f"{current_question['explanation']}"
-            )
-
-            result_label_practice.config(
-                text=result_text,
+                text=(
+                    "❌ INCORRECT\n\n"
+                    "❌ YOUR ANSWER\n"
+                    f"{user_answer}\n\n"
+                    "☑ CORRECT ANSWER\n"
+                    f"{correct_answer}\n\n"
+                    "💡 EXPLANATION\n"
+                    f"{current_question['explanation']}\n\n"
+                    "📝 SOLUTION\n"
+                    f"{current_question['solution']}"
+                ),
                 fg="#ff6b6b"
             )
 
             speak_text(
                 "That answer is incorrect. "
-                f"Your current score is "
-                f"{practice_correct} out of "
-                f"{practice_total}. "
-                f"Your accuracy is "
-                f"{accuracy:.1f} percent. "
-                f"The correct solution is "
-                f"{correct_answer}. "
-                "Here is the explanation. "
-                f"{current_question['explanation']}"
+                f"The correct answer is {correct_answer}. "
+                + current_question["explanation"]
+                + " The solution is. "
+                + current_question["solution"]
             )
 
-    # ========================================================
+        update_practice_score()
+
+    # --------------------------------------------------------
     # NEXT QUESTION
-    # ========================================================
+    # --------------------------------------------------------
 
     def next_question():
 
-        if current_question is None:
+        # This is the important fix:
+        # next button directly generates another question.
+        start_practice()
 
-            start_practice()
+    # --------------------------------------------------------
+    # BUTTON AREA
+    # This is OUTSIDE the expanding question frame, so it
+    # remains visible after an incorrect answer.
+    # --------------------------------------------------------
 
-        elif not practice_answered:
-
-            messagebox.showwarning(
-                "Submit First",
-                "Please submit your current answer first."
-            )
-
-        else:
-
-            start_practice()
-
-    # ========================================================
-    # PRACTICE ANALYSIS
-    # ========================================================
-
-    def show_practice_analysis():
-
-        if practice_total == 0:
-
-            messagebox.showinfo(
-                "Practice Analysis",
-                "Solve at least one question first."
-            )
-
-            return
-
-        accuracy = (
-            practice_correct
-            /
-            practice_total
-            *
-            100
-        )
-
-        if accuracy >= 90:
-
-            level = "🔥 Excellent!"
-
-            advice = (
-                "You are performing very well. "
-                "Try tougher questions."
-            )
-
-        elif accuracy >= 75:
-
-            level = "⭐ Very Good!"
-
-            advice = (
-                "Good performance. "
-                "Keep practicing consistently."
-            )
-
-        elif accuracy >= 50:
-
-            level = "📚 Needs Practice"
-
-            advice = (
-                "Your basics are developing. "
-                "Review incorrect questions."
-            )
-
-        else:
-
-            level = "💪 Keep Practicing"
-
-            advice = (
-                "Focus on understanding concepts "
-                "before attempting tougher questions."
-            )
-
-        analysis = (
-            "🎯 PRACTICE PERFORMANCE ANALYSIS\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"Difficulty: {practice_difficulty}\n"
-            f"Question Type: {practice_type}\n\n"
-            f"Total Questions: {practice_total}\n"
-            f"Correct: {practice_correct}\n"
-            f"Wrong: {practice_wrong}\n"
-            f"Score: {practice_correct}/"
-            f"{practice_total}\n"
-            f"Accuracy: {accuracy:.1f}%\n\n"
-            f"Performance: {level}\n\n"
-            f"💡 Mentor Advice:\n"
-            f"{advice}\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        )
-
-        result_label_practice.config(
-            text=analysis,
-            fg="#60a5fa"
-        )
-
-        speak_text(
-            "Practice analysis. "
-            f"You attempted "
-            f"{practice_total} questions. "
-            f"You got "
-            f"{practice_correct} correct "
-            f"and "
-            f"{practice_wrong} wrong. "
-            f"Your accuracy is "
-            f"{accuracy:.1f} percent. "
-            f"{advice}"
-        )
-
-    # ========================================================
-    # BUTTONS
-    # ========================================================
-
-    button_frame = tk.Frame(
+    practice_button_frame = tk.Frame(
         practice_window,
-        bg="#101820"
+        bg="#101820",
+        height=58
     )
 
-    button_frame.pack(
+    practice_button_frame.pack(
         fill="x",
-        pady=15
+        padx=15,
+        pady=(0, 10)
     )
+
+    practice_button_frame.pack_propagate(False)
 
     start_button = tk.Button(
-        button_frame,
+        practice_button_frame,
         text="🚀 START PRACTICE",
-        font=("Segoe UI", 11, "bold"),
+        font=("Segoe UI", 10, "bold"),
         bg="#2d89ef",
         fg="white",
         relief="flat",
-        padx=15,
-        pady=9,
+        padx=18,
+        pady=8,
         command=start_practice
     )
 
@@ -2518,14 +1785,14 @@ def open_practice_mode():
     )
 
     submit_button = tk.Button(
-        button_frame,
+        practice_button_frame,
         text="✅ SUBMIT ANSWER",
-        font=("Segoe UI", 11, "bold"),
+        font=("Segoe UI", 10, "bold"),
         bg="#16875a",
         fg="white",
         relief="flat",
-        padx=15,
-        pady=9,
+        padx=18,
+        pady=8,
         command=submit_answer
     )
 
@@ -2535,14 +1802,14 @@ def open_practice_mode():
     )
 
     next_button = tk.Button(
-        button_frame,
+        practice_button_frame,
         text="➡️ NEXT QUESTION",
-        font=("Segoe UI", 11, "bold"),
+        font=("Segoe UI", 10, "bold"),
         bg="#7c3aed",
         fg="white",
         relief="flat",
-        padx=15,
-        pady=9,
+        padx=18,
+        pady=8,
         command=next_question
     )
 
@@ -2551,20 +1818,24 @@ def open_practice_mode():
         padx=5
     )
 
-    analysis_button = tk.Button(
-        button_frame,
-        text="📊 PRACTICE ANALYSIS",
-        font=("Segoe UI", 11, "bold"),
-        bg="#d97706",
+    # --------------------------------------------------------
+    # CLOSE BUTTON
+    # --------------------------------------------------------
+
+    close_button = tk.Button(
+        practice_button_frame,
+        text="✖ CLOSE",
+        font=("Segoe UI", 10),
+        bg="#24333d",
         fg="white",
         relief="flat",
-        padx=15,
-        pady=9,
-        command=show_practice_analysis
+        padx=18,
+        pady=8,
+        command=practice_window.destroy
     )
 
-    analysis_button.pack(
-        side="left",
+    close_button.pack(
+        side="right",
         padx=5
     )
 
@@ -2577,11 +1848,7 @@ def login():
 
     global current_username
 
-    username = (
-        username_entry
-        .get()
-        .strip()
-    )
+    username = username_entry.get().strip()
 
     if not username:
 
@@ -2592,43 +1859,31 @@ def login():
 
         return
 
-    cursor.execute(
-        """
-        SELECT username
-        FROM users
-        WHERE username = ?
-        """,
-        (
-            username,
-        )
-    )
+    cursor.execute("""
+    SELECT username
+    FROM users
+    WHERE username = ?
+    """, (username,))
 
     user = cursor.fetchone()
 
     if user is None:
 
-        cursor.execute(
-            """
-            INSERT INTO users (username)
-            VALUES (?)
-            """,
-            (
-                username,
-            )
-        )
+        cursor.execute("""
+        INSERT INTO users (username)
+        VALUES (?)
+        """, (username,))
 
         connection.commit()
 
         welcome = (
-            f"Welcome to AI Code Mentor, "
-            f"{username}!"
+            f"Welcome to AI Code Mentor, {username}!"
         )
 
     else:
 
         welcome = (
-            f"Welcome back, "
-            f"{username}!"
+            f"Welcome back, {username}!"
         )
 
     current_username = username
@@ -2646,9 +1901,7 @@ def login():
 
     update_dashboard()
 
-    speak_text(
-        welcome
-    )
+    speak_text(welcome)
 
 
 # ============================================================
@@ -2709,11 +1962,7 @@ root.configure(
 style = ttk.Style()
 
 try:
-
-    style.theme_use(
-        "clam"
-    )
-
+    style.theme_use("clam")
 except Exception:
     pass
 
@@ -2738,7 +1987,6 @@ login_frame.pack(
     expand=True
 )
 
-
 login_title = tk.Label(
     login_frame,
     text="🤖 AI CODE MENTOR",
@@ -2751,7 +1999,6 @@ login_title.pack(
     pady=(130, 15)
 )
 
-
 login_subtitle = tk.Label(
     login_frame,
     text="Your Personal Python Coding Mentor",
@@ -2761,7 +2008,6 @@ login_subtitle = tk.Label(
 )
 
 login_subtitle.pack()
-
 
 username_label = tk.Label(
     login_frame,
@@ -2775,7 +2021,6 @@ username_label.pack(
     pady=(25, 5)
 )
 
-
 username_entry = tk.Entry(
     login_frame,
     font=("Segoe UI", 14),
@@ -2786,7 +2031,6 @@ username_entry = tk.Entry(
 username_entry.pack(
     ipady=8
 )
-
 
 login_button = tk.Button(
     login_frame,
@@ -2829,10 +2073,7 @@ header.pack(
     fill="x"
 )
 
-header.pack_propagate(
-    False
-)
-
+header.pack_propagate(False)
 
 title_label = tk.Label(
     header,
@@ -2846,7 +2087,6 @@ title_label.pack(
     side="left",
     padx=25
 )
-
 
 user_label = tk.Label(
     header,
@@ -2895,10 +2135,7 @@ sidebar.pack(
     padx=(0, 15)
 )
 
-sidebar.pack_propagate(
-    False
-)
-
+sidebar.pack_propagate(False)
 
 sidebar_title = tk.Label(
     sidebar,
@@ -2914,20 +2151,16 @@ sidebar_title.pack(
 
 
 def sidebar_button(
-        text,
-        command,
-        active=False):
+    text,
+    command,
+    active=False
+):
 
     button = tk.Button(
         sidebar,
         text=text,
         font=("Segoe UI", 10),
-        bg=(
-            "#2d89ef"
-            if active
-            else
-            "#24333d"
-        ),
+        bg="#2d89ef" if active else "#24333d",
         fg="white",
         relief="flat",
         anchor="w",
@@ -3008,9 +2241,7 @@ stats_frame.pack(
 )
 
 
-def create_card(
-        parent,
-        title):
+def create_card(parent, title):
 
     frame = tk.Frame(
         parent,
@@ -3024,9 +2255,7 @@ def create_card(
         padx=(0, 10)
     )
 
-    frame.pack_propagate(
-        False
-    )
+    frame.pack_propagate(False)
 
     title_label_card = tk.Label(
         frame,
@@ -3090,7 +2319,6 @@ editor_label.pack(
     anchor="w"
 )
 
-
 editor_frame = tk.Frame(
     right_area,
     bg="#17232c",
@@ -3102,10 +2330,7 @@ editor_frame.pack(
     pady=(5, 10)
 )
 
-editor_frame.pack_propagate(
-    False
-)
-
+editor_frame.pack_propagate(False)
 
 code_editor = tk.Text(
     editor_frame,
@@ -3139,7 +2364,6 @@ button_frame.pack(
     pady=(0, 10)
 )
 
-
 run_button = tk.Button(
     button_frame,
     text="▶️ RUN & ANALYZE",
@@ -3156,7 +2380,6 @@ run_button.pack(
     side="left",
     padx=(0, 8)
 )
-
 
 clear_button = tk.Button(
     button_frame,
@@ -3191,7 +2414,6 @@ result_label.pack(
     anchor="w"
 )
 
-
 result_frame = tk.Frame(
     right_area,
     bg="#17232c"
@@ -3201,7 +2423,6 @@ result_frame.pack(
     fill="both",
     expand=True
 )
-
 
 result_text = tk.Text(
     result_frame,
@@ -3227,10 +2448,8 @@ result_text.pack(
 def close_application():
 
     try:
-
         connection.commit()
         connection.close()
-
     except Exception:
         pass
 
